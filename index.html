@@ -54,7 +54,6 @@ h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
 /* Masthead */
 .top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; }
 .top h1 { font-size: 30px; font-weight: 700; letter-spacing: -.01em; }
-.top p { margin: 0; color: var(--muted); max-width: 40rem; }
 
 /* Drop box */
 .drop {
@@ -68,9 +67,8 @@ h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
 }
 .drop:hover, .drop.over { border-color: var(--ink); }
 .drop.over { border-style: solid; }
-.drop h2 { font-size: 24px; font-weight: 600; }
-.drop p { margin: 0; color: var(--muted); max-width: 36rem; }
-.drop .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 6px; }
+.drop { gap: 16px; }
+.drop p { margin: 0; font-size: 17px; font-weight: 500; }
 
 button, .btn {
   font: 600 14px/1 var(--f-body);
@@ -84,7 +82,6 @@ button, .btn {
 .btn-ghost:hover { border-color: var(--muted); }
 button:disabled { opacity: .45; cursor: not-allowed; }
 #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.note { font-size: 13px; color: var(--muted); }
 #flash { min-height: 1.5em; color: var(--ink); font-weight: 600; margin: 0; }
 #flash:empty { display: none; }
 
@@ -94,7 +91,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .bar .count { color: var(--muted); font-family: var(--f-body); font-weight: 400; font-size: 15px; margin-left: 6px; }
 .bar .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 #list { display: grid; gap: 16px; }
-.empty { margin: 0; padding: 28px 20px; text-align: center; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; }
+[hidden] { display: none !important; }
 
 /* Ticket: one per PDF */
 .ticket { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -156,21 +153,16 @@ tr.total td.raw { font-weight: 400; }
 <div class="wrap">
   <header class="top">
     <h1>Tuka Layout to Excel</h1>
-    <p>Reads the header of a Tukatech marker PDF and builds the JC consumption sheet (.xlsx). The PDFs are read inside this browser and never uploaded.</p>
   </header>
 
   <label class="drop" id="drop" for="fileInput">
-    <h2>Drop marker PDFs here</h2>
-    <p>One sheet per PDF. You can drop several at once, for example all colourways of a JC.</p>
-    <span class="row">
-      <span class="btn btn-primary" id="chooseBtn" role="button" tabindex="0">Choose PDFs</span>
-      <span class="note">Reads: date, time, file, Total, Placed, Bundles, Efficiency, Width, Length, Yield</span>
-    </span>
+    <p>One sheet per PDF. You can drop several at once</p>
+    <span class="btn btn-primary" id="chooseBtn" role="button" tabindex="0">Choose PDFs</span>
     <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple>
   </label>
   <p id="flash" role="status" aria-live="polite"></p>
 
-  <section class="bar" aria-label="Results">
+  <section class="bar" id="bar" aria-label="Results" hidden>
     <h2>Sheets<span class="count" id="count"></span></h2>
     <div class="acts">
       <button class="btn-ghost" id="clearBtn" type="button">Clear</button>
@@ -500,9 +492,8 @@ function ticket(it) {
 }
 
 function render() {
-  list.innerHTML = items.length
-    ? items.map(ticket).join('')
-    : '<p class="empty">No PDFs added yet. Drop Tukatech marker PDFs in the box above.</p>';
+  list.innerHTML = items.map(ticket).join('');
+  document.getElementById('bar').hidden = !items.length;
   const ok = items.filter(it => it.rec).length;
   document.getElementById('count').textContent = items.length ? `${items.length} PDF${items.length > 1 ? 's' : ''}` : '';
   const all = document.getElementById('allBtn');
