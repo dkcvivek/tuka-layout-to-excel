@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tuka Layout to Excel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column. A drop box on top, then one ticket per marker PDF. Greyscale only. */
+:root {
+  --paper: #FFFFFF;
+  --surface: #FFFFFF;
+  --soft: #F4F4F4;
+  --ink: #111111;
+  --muted: #6B6B6B;
+  --line: #E0E0E0;
+  --edge: #A8A8A8;
+  --strong: #111111;
+  --on-strong: #FFFFFF;
+  --focus: #111111;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0E0E0E; --surface: #151515; --soft: #1D1D1D; --ink: #EDEDED; --muted: #9A9A9A;
+    --line: #2C2C2C; --edge: #555555; --strong: #EDEDED; --on-strong: #111111; --focus: #EDEDED;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0E0E0E; --surface: #151515; --soft: #1D1D1D; --ink: #EDEDED; --muted: #9A9A9A;
+  --line: #2C2C2C; --edge: #555555; --strong: #EDEDED; --on-strong: #111111; --focus: #EDEDED;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1.5 var(--f-body);
+  padding: 0 16px;
+}
+.wrap { max-width: 68rem; margin: 0 auto; padding-block: 28px 64px; display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* Masthead */
+.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; }
+.top h1 { font-size: 30px; font-weight: 700; letter-spacing: -.01em; }
+.top p { margin: 0; color: var(--muted); max-width: 40rem; }
+
+/* Drop box */
+.drop {
+  display: grid; justify-items: start; gap: 10px;
+  padding: 32px 28px;
+  border: 1.5px dashed var(--edge);
+  border-radius: 8px;
+  background: var(--soft);
+  cursor: pointer;
+  transition: border-color .15s, background-color .15s;
+}
+.drop:hover, .drop.over { border-color: var(--ink); }
+.drop.over { border-style: solid; }
+.drop h2 { font-size: 24px; font-weight: 600; }
+.drop p { margin: 0; color: var(--muted); max-width: 36rem; }
+.drop .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 6px; }
+
+button, .btn {
+  font: 600 14px/1 var(--f-body);
+  border-radius: 6px; padding: 10px 16px; cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-primary { background: var(--strong); color: var(--on-strong); }
+.btn-primary:hover { opacity: .82; }
+.btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-ghost:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+#fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.note { font-size: 13px; color: var(--muted); }
+#flash { min-height: 1.5em; color: var(--ink); font-weight: 600; margin: 0; }
+#flash:empty { display: none; }
+
+/* Results bar */
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.bar h2 { font-size: 20px; font-weight: 600; }
+.bar .count { color: var(--muted); font-family: var(--f-body); font-weight: 400; font-size: 15px; margin-left: 6px; }
+.bar .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+#list { display: grid; gap: 16px; }
+.empty { margin: 0; padding: 28px 20px; text-align: center; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; }
+
+/* Ticket: one per PDF */
+.ticket { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.t-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 28px; padding: 18px 20px 16px; border-bottom: 1px solid var(--line); }
+.t-id { display: grid; gap: 6px; min-width: 0; flex: 1 1 22rem; }
+.t-src { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.t-src .mono { overflow-wrap: anywhere; }
+.t-id h3 { font-size: 24px; font-weight: 600; line-height: 1.15; overflow-wrap: anywhere; }
+.t-meta { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 13px; }
+.chip { border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; font-weight: 500; font-size: 13px; }
+.t-meta .mono { color: var(--muted); }
+
+.pill { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: 99px; }
+.pill.ok { color: var(--muted); border: 1px solid var(--line); }
+.pill.warn, .pill.bad { color: var(--on-strong); background: var(--strong); }
+
+.t-cons { display: grid; align-content: start; justify-items: end; text-align: right; gap: 2px; }
+.t-cons .lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.t-cons .big { font-family: var(--f-display); font-size: 40px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.t-cons .big small { font-size: 18px; font-weight: 500; margin-left: 4px; color: var(--muted); }
+.t-cons .sub { font-size: 13px; color: var(--muted); }
+
+.warns { margin: 0; padding: 12px 20px 12px 40px; display: grid; gap: 4px; border-bottom: 1px solid var(--line); background: var(--soft); font-size: 14px; }
+.err { margin: 0; padding: 16px 20px; color: var(--ink); }
+
+.t-body { display: grid; grid-template-columns: minmax(0, 19rem) minmax(0, 1fr); gap: 20px 28px; padding: 18px 20px 20px; }
+.fields { display: grid; gap: 12px; align-content: start; }
+.field { display: grid; gap: 4px; }
+.field label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.field label .cell { font-family: var(--f-mono); font-weight: 400; letter-spacing: 0; text-transform: none; }
+.field input {
+  font: 500 15px/1.3 var(--f-body); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%;
+}
+.field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 1px var(--focus); }
+.suffix { display: flex; align-items: center; gap: 6px; }
+.suffix span { color: var(--muted); font-family: var(--f-mono); font-size: 13px; }
+.fields .btn-primary { justify-content: center; margin-top: 4px; overflow-wrap: anywhere; line-height: 1.25; }
+
+.tbl-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td.raw { font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+td.unit { color: var(--muted); }
+tr.total td { background: var(--soft); font-weight: 600; border-bottom: 0; }
+tr.total td.raw { font-weight: 400; }
+
+@media (max-width: 760px) {
+  .t-body { grid-template-columns: minmax(0, 1fr); }
+  .t-cons { justify-items: start; text-align: left; }
+  .drop { padding: 24px 20px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Tuka Layout to Excel</h1>
+    <p>Reads the header of a Tukatech marker PDF and builds the JC consumption sheet (.xlsx). The PDFs are read inside this browser and never uploaded.</p>
+  </header>
+
+  <label class="drop" id="drop" for="fileInput">
+    <h2>Drop marker PDFs here</h2>
+    <p>One sheet per PDF. You can drop several at once, for example all colourways of a JC.</p>
+    <span class="row">
+      <span class="btn btn-primary" id="chooseBtn" role="button" tabindex="0">Choose PDFs</span>
+      <span class="note">Reads: date, time, file, Total, Placed, Bundles, Efficiency, Width, Length, Yield</span>
+    </span>
+    <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple>
+  </label>
+  <p id="flash" role="status" aria-live="polite"></p>
+
+  <section class="bar" aria-label="Results">
+    <h2>Sheets<span class="count" id="count"></span></h2>
+    <div class="acts">
+      <button class="btn-ghost" id="clearBtn" type="button">Clear</button>
+      <button class="btn-primary" id="allBtn" type="button">Download all</button>
+    </div>
+  </section>
+  <div id="list"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+// CORE-START (pure functions, no DOM; tested in Node against the sample PDFs)
+const STYLES_XML = `<?xml version="1.0" encoding="utf-8"?><x:styleSheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:numFmts count="10"><x:numFmt numFmtId="200" formatCode="dd-mm-yyyy" /><x:numFmt numFmtId="201" formatCode="hh:mm:ss" /><x:numFmt numFmtId="202" formatCode="0" /><x:numFmt numFmtId="203" formatCode="0.00%" /><x:numFmt numFmtId="204" formatCode="0.00" /><x:numFmt numFmtId="205" formatCode="0.0000" /><x:numFmt numFmtId="206" formatCode="0.00000" /><x:numFmt numFmtId="207" formatCode="&quot;DATE: &quot;dd-mm-yyyy" /><x:numFmt numFmtId="208" formatCode="&quot;TIME: &quot;hh:mm:ss" /><x:numFmt numFmtId="209" formatCode="0.000000" /></x:numFmts><x:fonts count="8"><x:font><x:sz val="11" /><x:name val="Carlito" /></x:font><x:font><x:sz val="11" /><x:name val="Arial" /></x:font><x:font><x:b /><x:sz val="15" /><x:name val="Arial" /></x:font><x:font><x:b /><x:sz val="11" /><x:name val="Arial" /></x:font><x:font><x:sz val="14" /><x:name val="Century Gothic" /></x:font><x:font><x:b /><x:sz val="14" /><x:name val="Century Gothic" /></x:font><x:font><x:b /><x:sz val="20" /><x:name val="Century Gothic" /></x:font><x:font><x:b /><x:sz val="16" /><x:name val="Century Gothic" /></x:font></x:fonts><x:fills count="4"><x:fill><x:patternFill patternType="none" /></x:fill><x:fill><x:patternFill patternType="gray125" /></x:fill><x:fill><x:patternFill patternType="solid"><x:fgColor rgb="FFE7E6E6" /></x:patternFill></x:fill><x:fill><x:patternFill patternType="solid"><x:fgColor rgb="FFE7E6E6" /></x:patternFill></x:fill></x:fills><x:borders count="2"><x:border><x:left /><x:right /><x:top /><x:bottom /><x:diagonal /></x:border><x:border><x:left style="dotted"><x:color rgb="FF666666" /></x:left><x:right style="dotted"><x:color rgb="FF666666" /></x:right><x:top style="dotted"><x:color rgb="FF666666" /></x:top><x:bottom style="dotted"><x:color rgb="FF666666" /></x:bottom><x:diagonal /></x:border></x:borders><x:cellStyleXfs count="1"><x:xf numFmtId="0" fontId="0" fillId="0" borderId="0" /></x:cellStyleXfs><x:cellXfs count="65"><x:xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" /><x:xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="center" /></x:xf><x:xf numFmtId="200" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="201" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="202" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="203" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="204" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="205" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="206" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="206" fontId="3" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment wrapText="1" /></x:xf><x:xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="5" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="center" /></x:xf><x:xf numFmtId="200" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="201" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment wrapText="1" /></x:xf><x:xf numFmtId="202" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="203" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="204" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="205" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="206" fontId="5" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" /><x:xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="5" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="center" vertical="center" /></x:xf><x:xf numFmtId="200" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="201" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" wrapText="1" /></x:xf><x:xf numFmtId="202" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="203" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="204" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="205" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="206" fontId="5" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="7" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="center" vertical="center" /></x:xf><x:xf numFmtId="0" fontId="7" fillId="2" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="center" vertical="center" /></x:xf><x:xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="200" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="201" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" wrapText="1" /></x:xf><x:xf numFmtId="202" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="203" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="204" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="205" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="206" fontId="5" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="7" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="206" fontId="4" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="207" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="208" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="207" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="right" vertical="center" /></x:xf><x:xf numFmtId="208" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="right" vertical="center" /></x:xf><x:xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="right" vertical="center" wrapText="1" /></x:xf><x:xf numFmtId="0" fontId="4" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="7" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf><x:xf numFmtId="0" fontId="7" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="center" vertical="center" /></x:xf><x:xf numFmtId="0" fontId="7" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment horizontal="center" vertical="center" /></x:xf><x:xf numFmtId="0" fontId="7" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" wrapText="1" /></x:xf><x:xf numFmtId="0" fontId="5" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" wrapText="1" /></x:xf><x:xf numFmtId="209" fontId="5" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><x:alignment vertical="center" /></x:xf></x:cellXfs><x:cellStyles count="1"><x:cellStyle name="Normal" xfId="0" /></x:cellStyles></x:styleSheet>`;
+
+const UNIT_TO_M = { mm: 0.001, cm: 0.01, m: 1, in: 0.0254, inch: 0.0254, inches: 0.0254, '"': 0.0254, yd: 0.9144, yds: 0.9144 };
+const UNIT_RE = '(mm|cm|m|inches|inch|in|yds|yd|")';
+const clean = s => String(s).replace(/\s+/g, ' ').trim();
+const round = (n, dp = 6) => Math.round(n * 10 ** dp) / 10 ** dp;
+const titleCase = s => s.toLowerCase().replace(/(^|[\s_])([a-z])/g, (m, a, b) => a + b.toUpperCase());
+
+// lines: the text items of page 1, in PDF order
+function parseMarker(lines) {
+  const text = clean(lines.join(' '));
+  const grab = re => { const m = text.match(re); return m || null; };
+
+  const fileM = grab(/File:\s*(.+?)\s+(?=Total:|Placed:|Bundles:|Efficiency:|Width:|Length:|Yield:|$)/i);
+  const totalM = grab(/Total:\s*(\d+)/i);
+  const placedM = grab(/Placed:\s*(\d+)/i);
+  const bundlesM = grab(/Bundles:\s*(\d+)/i);
+  const effM = grab(/Efficiency:\s*([\d.]+)\s*%/i);
+  const widthM = grab(new RegExp('Width:\\s*([\\d.]+)\\s*' + UNIT_RE, 'i'));
+  const lengthM = grab(new RegExp('Length:\\s*([\\d.]+)\\s*' + UNIT_RE, 'i'));
+  const yieldM = grab(new RegExp('Yield:\\s*([\\d.]+)\\s*' + UNIT_RE, 'i'));
+  const missing = [['File', fileM], ['Total', totalM], ['Placed', placedM], ['Bundles', bundlesM], ['Efficiency', effM],
+    ['Width', widthM], ['Length', lengthM], ['Yield', yieldM]].filter(([, m]) => !m).map(([k]) => k);
+  if (missing.length === 8) throw new Error('This PDF has no Tukatech marker header on page 1 (the line with File:, Total:, Bundles:, Yield:). Check that it is a marker layout PDF.');
+  if (missing.length) throw new Error('The header is missing: ' + missing.join(', ') + '. These values are needed for the sheet.');
+
+  // Date and time printed before "File:". Tukatech prints DD-MM-YYYY.
+  const dt = grab(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  let date = null, time = null;
+  if (dt) {
+    let d = +dt[1], mo = +dt[2];
+    if (mo > 12 && d <= 12) [d, mo] = [mo, d];
+    date = { y: +dt[3], m: mo, d };
+    time = { h: +dt[4], mi: +dt[5], s: +(dt[6] || 0) };
+  }
+
+  const file = clean(fileM[1]);
+  const fileBase = file.replace(/\.[a-z0-9]{2,4}$/i, '');
+  const markerM = grab(/\(([^()]+?)\s+-\s+\d+\s*:\s*\d+\s*\)/);
+  const marker = markerM ? clean(markerM[1]) : null;
+
+  // Marker name = "<STYLE> JC <number> <rest>"; the file name is the marker name plus the fabric.
+  const src = marker || fileBase;
+  const jcM = src.match(/\bJC\s*[-#:]?\s*(\d+)\b/i);
+  let style = src, jcNum = '', jcRest = '';
+  if (jcM) {
+    style = src.slice(0, jcM.index).trim();
+    jcNum = jcM[1];
+    jcRest = src.slice(jcM.index + jcM[0].length).replace(/^[\s\-–_]+/, '').trim();
+  }
+  let fabricFile = '';
+  if (!marker) {
+    fabricFile = jcRest; jcRest = '';
+  } else if (fileBase.toUpperCase().startsWith(marker.toUpperCase())) {
+    fabricFile = fileBase.slice(marker.length);
+  } else {
+    const i = fileBase.toUpperCase().indexOf(marker.toUpperCase());
+    if (i >= 0) fabricFile = fileBase.slice(0, i) + ' ' + fileBase.slice(i + marker.length);
+  }
+  fabricFile = clean(fabricFile.replace(/^[\s\-–_]+/, '')).toUpperCase();
+
+  const fabricPattern = patternFabric(lines);
+  let fabric = fabricFile || fabricPattern || '';
+  // Same fabric when one name's words all appear in the other ("WAFFLE 2" vs "WAFFLE COL 2"); MASH vs MESH differs.
+  const words = s => s.split(' ').filter(Boolean);
+  const within = (a, b) => words(a).every(w => words(b).includes(w));
+  const differs = fabricFile && fabricPattern && !within(fabricFile, fabricPattern) && !within(fabricPattern, fabricFile);
+  if (differs) fabric = `${fabricFile} (filename) / ${fabricPattern} (pattern)`;
+
+  const measure = m => {
+    const unit = m[2].toLowerCase();
+    return { m: round(parseFloat(m[1]) * UNIT_TO_M[unit]), unit: unit === 'm' ? 'm' : unit, raw: m[0].replace(/\s+/g, '') };
+  };
+  const total = +totalM[1], placed = +placedM[1], bundles = +bundlesM[1];
+  const rec = {
+    style: clean(style).toUpperCase(),
+    jcNum, jcRest,
+    jcNumber: jcRest ? `${jcNum} - ${jcRest}` : jcNum,
+    file, fabric, fabricFile, fabricPattern,
+    date, time, total, placed, bundles,
+    efficiency: round(parseFloat(effM[1]) / 100),
+    width: measure(widthM), length: measure(lengthM), yield: measure(yieldM),
+    raw: { total: totalM[0].replace(/\s+/g, ''), placed: placedM[0].replace(/\s+/g, ''), bundles: bundlesM[0].replace(/\s+/g, ''), efficiency: effM[0].replace(/\s+/g, '') },
+    warnings: [],
+  };
+  // "_extracted" keeps downloads from clashing with hand-made sheets of the same name.
+  rec.excelName = defaultExcelName(rec) + '_extracted';
+
+  if (placed < total) rec.warnings.push(`Only ${placed} of ${total} parts are placed in this marker.`);
+  if (differs) rec.warnings.push(`Fabric names differ: the file name says ${fabricFile}, the pattern pieces say ${fabricPattern}. Both are kept in the Fabric box; edit it if one is wrong.`);
+  if (!marker) rec.warnings.push('The marker name line "( … - 0:N)" was not found, so the JC number and fabric are a best guess. Check them.');
+  if (!jcNum) rec.warnings.push('No "JC" number was found in the file name. Fill in the JC number.');
+  if (!bundles) rec.warnings.push('Bundles is 0, so consumption per piece is left blank.');
+  if (!date) rec.warnings.push('No date and time were found in the header. The sheet will leave them blank.');
+  return rec;
+}
+
+// The fabric printed on the pattern pieces: the label line right after "[n]".
+function patternFabric(lines) {
+  const ls = lines.map(clean).filter(Boolean);
+  const counts = new Map();
+  for (let i = 1; i < ls.length; i++) {
+    if (!/^\[\d+\]$/.test(ls[i - 1])) continue;
+    const s = ls[i];
+    if (/\bJC\b/i.test(s) || s.length > 30 || /^\[\d+\]$/.test(s) || !/^[A-Za-z][A-Za-z0-9 .&\/-]*$/.test(s)) continue;
+    counts.set(s.toUpperCase(), (counts.get(s.toUpperCase()) || 0) + 1);
+  }
+  let best = '', n = 0;
+  for (const [k, v] of counts) if (v > n) { best = k; n = v; }
+  return best;
+}
+
+function defaultExcelName(rec) {
+  if (!rec.jcNum) return safeName(rec.file.replace(/\.[a-z0-9]{2,4}$/i, ''));
+  const words = rec.jcRest
+    ? rec.jcRest.split(' ').filter(Boolean).slice(0, 2)
+    : rec.fabricFile.split(' ').filter(w => w && !/^(COL|COLOR|COLOUR)$/i.test(w));
+  return safeName(['JC' + rec.jcNum, ...words.map(titleCase)].join('_'));
+}
+const safeName = s => clean(s).replace(/[\\\/:*?"<>|\[\]]/g, '').replace(/\s+/g, '_') || 'Marker';
+
+const consumption = rec => rec.bundles > 0 ? round(rec.yield.m / rec.bundles, 10) : null;
+
+// ---- xlsx writer: same layout and styles as the JC template ----
+const esc = s => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const cStr = (r, s, v) => `<c r="${r}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
+const cNum = (r, s, v) => `<c r="${r}" s="${s}"><v>${v}</v></c>`;
+const cNil = (r, s) => s == null ? `<c r="${r}"/>` : `<c r="${r}" s="${s}"/>`;
+const xRow = (n, ht, cells) => `<row r="${n}" ht="${ht}" customHeight="1">${cells.join('')}</row>`;
+const unitNote = u => u === 'm' ? '' : ` (PDF: ${u})`;
+
+function sheetXml(rec) {
+  const serial = rec.date ? (Date.UTC(rec.date.y, rec.date.m - 1, rec.date.d) - Date.UTC(1899, 11, 30)) / 86400000 : null;
+  const dayFrac = rec.time ? (rec.time.h * 3600 + rec.time.mi * 60 + rec.time.s) / 86400 : null;
+  const cons = consumption(rec);
+  const line = (n, a, b, cell, d, ht = 32) => xRow(n, ht, [cStr('A' + n, 41, a), cStr('B' + n, 41, b), cell, d ? cStr('D' + n, 41, d) : cNil('D' + n, 41)]);
+  const rows = [
+    xRow(1, 32, ['A1', 'B1', 'C1', 'D1'].map(r => cNil(r, 27))),
+    xRow(2, 42, [cStr('A2', 38, rec.style), cNil('B2', 27),
+      serial == null ? cNil('C2', 55) : cNum('C2', 55, serial),
+      dayFrac == null ? cNil('D2', 56) : cNum('D2', 56, dayFrac)]),
+    xRow(3, 80, [cStr('A3', 62, 'JC NUMBER: ' + rec.jcNumber), cNil('B3', 32), cStr('C3', 57, 'FILE: ' + rec.file), cNil('D3', 57)]),
+    xRow(4, 38, ['A4', 'B4', 'C4', 'D4'].map(r => cNil(r))),
+    xRow(5, 38, [cStr('A5', 61, 'Original label'), cStr('B5', 61, 'Excel field'), cStr('C5', 61, 'Value'), cStr('D5', 61, 'Unit')]),
+    line(6, 'File (fabric)', 'Fabric', cStr('C6', 44, rec.fabric), '', 64),
+    line(7, 'Total', 'Total parts', cNum('C7', 45, rec.total), 'parts'),
+    line(8, 'Placed', 'Placed parts', cNum('C8', 45, rec.placed), 'parts'),
+    line(9, 'Bundles', 'Pieces', cNum('C9', 45, rec.bundles), 'pieces'),
+    line(10, 'Efficiency', 'Efficiency', cNum('C10', 46, rec.efficiency), '%'),
+    line(11, 'Width' + unitNote(rec.width.unit), 'Width of fabric', cNum('C11', 48, rec.width.m), 'metres'),
+    line(12, 'Length' + unitNote(rec.length.unit), 'Total fabric length (all pieces)', cNum('C12', 48, rec.length.m), 'metres'),
+    line(13, 'Yield' + unitNote(rec.yield.unit), 'Yield printed in PDF', cNum('C13', 48, rec.yield.m), 'metres'),
+    xRow(14, 48, [cStr('A14', 63, 'Yield / Pieces (requested)'), cStr('B14', 49, 'CONSUMPTION PER PIECE'),
+      cons == null
+        ? '<c r="C14" s="64" t="str"><f>IF(C9&gt;0,C13/C9,"")</f><v></v></c>'
+        : `<c r="C14" s="64"><f>IF(C9&gt;0,C13/C9,"")</f><v>${cons}</v></c>`,
+      cStr('D14', 49, 'metres')]),
+  ];
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheetViews><sheetView showGridLines="0" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/>' +
+    '<cols><col min="1" max="1" width="28" customWidth="1"/><col min="2" max="2" width="47" customWidth="1"/><col min="3" max="3" width="28" customWidth="1"/><col min="4" max="4" width="17" customWidth="1"/></cols>' +
+    '<sheetData>' + rows.join('') + '</sheetData>' +
+    '<mergeCells count="2"><mergeCell ref="A3:B3"/><mergeCell ref="C3:D3"/></mergeCells>' +
+    '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+}
+
+function buildXlsx(rec) {
+  const sheetName = esc(safeName(rec.excelName).replace(/_extracted$/i, '').slice(0, 31));
+  return zipStore([
+    ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+    ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`],
+    ['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ['xl/styles.xml', STYLES_XML],
+    ['xl/worksheets/sheet1.xml', sheetXml(rec)],
+  ]);
+}
+
+// Minimal zip writer (stored, no compression). Excel opens these fine.
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(entries) {
+  const enc = new TextEncoder(), now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const [n, content] of entries) {
+    const name = enc.encode(n), data = enc.encode(content), crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, c) => s + c.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  const all = [...parts, ...central, new Uint8Array(end.buffer)];
+  const out = new Uint8Array(all.reduce((s, c) => s + c.length, 0));
+  let p = 0; for (const c of all) { out.set(c, p); p += c.length; }
+  return out;
+}
+// CORE-END
+
+// ---- UI ----
+const PDF_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
+
+const list = document.getElementById('list');
+const flash = document.getElementById('flash');
+let items = [], seq = 0;
+
+const pad = n => String(n).padStart(2, '0');
+const fmt = (n, dp) => n == null ? '' : n.toFixed(dp);
+const html = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+async function readPdfLines(file) {
+  if (!window.pdfjsLib) throw new Error('The PDF reader did not load. Connect to the internet and reload this page.');
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  try {
+    const page = await doc.getPage(1);
+    const tc = await page.getTextContent();
+    return tc.items.map(i => i.str);
+  } finally { doc.destroy(); }
+}
+
+async function addFiles(fileList) {
+  const files = [...fileList];
+  const pdfs = files.filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+  flash.textContent = files.length > pdfs.length
+    ? `Skipped ${files.length - pdfs.length} file(s) that are not PDFs.` : '';
+  if (!pdfs.length) return;
+  for (const f of pdfs) {
+    const it = { id: ++seq, src: f.name, rec: null, error: null };
+    try { it.rec = parseMarker(await readPdfLines(f)); }
+    catch (e) { it.error = e && e.message ? e.message : String(e); }
+    items.push(it);
+  }
+  render();
+}
+
+function status(it) {
+  if (it.error) return ['bad', 'Not read'];
+  if (it.rec.warnings.length) return ['warn', 'Check'];
+  return ['ok', 'Ready'];
+}
+
+function ticket(it) {
+  const [cls, label] = status(it);
+  const src = `<div class="t-src"><span class="mono">${html(it.src)}</span><span class="pill ${cls}">${label}</span></div>`;
+  if (it.error) {
+    return `<article class="ticket"><header class="t-head"><div class="t-id">${src}<h3>Could not read this PDF</h3></div></header><p class="err">${html(it.error)}</p></article>`;
+  }
+  const r = it.rec, cons = consumption(r);
+  const when = r.date ? `${pad(r.date.d)}-${pad(r.date.m)}-${r.date.y} ${pad(r.time.h)}:${pad(r.time.mi)}:${pad(r.time.s)}` : '';
+  const warns = r.warnings;
+  const row = (field, val, unit, raw, extra = '') => `<tr${extra}><td>${field}</td><td class="num">${val}</td><td class="unit">${unit}</td><td class="raw">${html(raw)}</td></tr>`;
+  const field = (key, label, cell, value) => `<div class="field"><label for="f${it.id}-${key}">${label}<span class="cell">${cell}</span></label>` +
+    (key === 'excelName'
+      ? `<div class="suffix"><input id="f${it.id}-${key}" data-id="${it.id}" data-key="${key}" value="${html(value)}" spellcheck="false"><span>.xlsx</span></div>`
+      : `<input id="f${it.id}-${key}" data-id="${it.id}" data-key="${key}" value="${html(value)}" spellcheck="false">`) + '</div>';
+  return `<article class="ticket" data-id="${it.id}">
+    <header class="t-head">
+      <div class="t-id">${src}
+        <h3 data-bind="style">${html(r.style)}</h3>
+        <div class="t-meta"><span class="chip" data-bind="jc">JC ${html(r.jcNumber)}</span><span class="chip" data-bind="fabric">${html(r.fabric)}</span><span class="mono">${when}</span></div>
+      </div>
+      <div class="t-cons">
+        <span class="lbl">Consumption per piece</span>
+        <span class="big">${cons == null ? '–' : fmt(cons, 4)}<small>m</small></span>
+        <span class="sub mono">${fmt(r.yield.m, 4)} m ÷ ${r.bundles} pieces</span>
+      </div>
+    </header>
+    ${warns.length ? `<ul class="warns">${warns.map(w => `<li>${html(w)}</li>`).join('')}</ul>` : ''}
+    <div class="t-body">
+      <div class="fields">
+        ${field('style', 'Style name', 'A2', r.style)}
+        ${field('jcNumber', 'JC number', 'A3', r.jcNumber)}
+        ${field('fabric', 'Fabric', 'C6', r.fabric)}
+        ${field('excelName', 'Excel file name', 'sheet', r.excelName)}
+        <button class="btn-primary" type="button" data-dl="${it.id}" data-bind="name">Download ${html(safeName(r.excelName))}.xlsx</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Excel field</th><th class="num">Value</th><th>Unit</th><th>In the PDF</th></tr></thead>
+          <tbody>
+            ${row('Total parts', r.total, 'parts', r.raw.total)}
+            ${row('Placed parts', r.placed, 'parts', r.raw.placed)}
+            ${row('Pieces', r.bundles, 'pieces', r.raw.bundles)}
+            ${row('Efficiency', fmt(r.efficiency * 100, 2) + '%', '', r.raw.efficiency)}
+            ${row('Width of fabric', fmt(r.width.m, 4), 'metres', r.width.raw)}
+            ${row('Total fabric length', fmt(r.length.m, 4), 'metres', r.length.raw)}
+            ${row('Yield printed in PDF', fmt(r.yield.m, 4), 'metres', r.yield.raw)}
+            ${row('Consumption per piece', cons == null ? '–' : fmt(cons, 6), 'metres', 'Yield ÷ Pieces', ' class="total"')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </article>`;
+}
+
+function render() {
+  list.innerHTML = items.length
+    ? items.map(ticket).join('')
+    : '<p class="empty">No PDFs added yet. Drop Tukatech marker PDFs in the box above.</p>';
+  const ok = items.filter(it => it.rec).length;
+  document.getElementById('count').textContent = items.length ? `${items.length} PDF${items.length > 1 ? 's' : ''}` : '';
+  const all = document.getElementById('allBtn');
+  all.disabled = ok < 1;
+  all.textContent = ok > 1 ? `Download all ${ok}` : 'Download all';
+  document.getElementById('clearBtn').disabled = !items.length;
+}
+
+function download(it) {
+  const bytes = buildXlsx(it.rec);
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = safeName(it.rec.excelName) + '.xlsx';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+list.addEventListener('input', e => {
+  const el = e.target.closest('input[data-key]');
+  if (!el) return;
+  const it = items.find(x => x.id === +el.dataset.id);
+  const r = it.rec;
+  r[el.dataset.key] = el.value;
+  const t = el.closest('.ticket');
+  t.querySelector('[data-bind="style"]').textContent = r.style;
+  t.querySelector('[data-bind="jc"]').textContent = 'JC ' + r.jcNumber;
+  t.querySelector('[data-bind="fabric"]').textContent = r.fabric;
+  t.querySelector('[data-bind="name"]').textContent = `Download ${safeName(r.excelName)}.xlsx`;
+});
+list.addEventListener('click', e => {
+  const b = e.target.closest('[data-dl]');
+  if (b) download(items.find(x => x.id === +b.dataset.dl));
+});
+document.getElementById('allBtn').addEventListener('click', async () => {
+  const ready = items.filter(it => it.rec);
+  for (const it of ready) { download(it); await new Promise(r => setTimeout(r, 350)); }
+});
+document.getElementById('clearBtn').addEventListener('click', () => { items = []; flash.textContent = ''; render(); });
+
+const mat = document.getElementById('drop');
+const input = document.getElementById('fileInput');
+input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+document.getElementById('chooseBtn').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+});
+['dragenter', 'dragover'].forEach(t => mat.addEventListener(t, e => { e.preventDefault(); mat.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => mat.addEventListener(t, e => { e.preventDefault(); mat.classList.remove('over'); }));
+mat.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+// A PDF dropped outside the mat should not open in the browser tab.
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => { e.preventDefault(); if (!mat.contains(e.target)) addFiles(e.dataTransfer.files); });
+
+render();
+if (!window.pdfjsLib) flash.textContent = 'The PDF reader did not load. Connect to the internet and reload this page.';
+</script>
+</body>
+</html>
